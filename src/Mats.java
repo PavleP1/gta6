@@ -18,7 +18,7 @@ public class Mats {
 
     public static void init(int sky) {
         Fog fog = new Fog();
-        fog.setMode(Fog.LINEAR); fog.setLinearDistances(40f, 125f); fog.setColor(sky);
+        fog.setMode(Fog.LINEAR); fog.setLinear(40f, 125f); fog.setColor(sky);
         for (int m = 0; m < COUNT; m++) {
             Appearance a = new Appearance();
             PolygonMode pm = new PolygonMode();
