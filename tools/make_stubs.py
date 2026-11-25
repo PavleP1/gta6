@@ -1,16 +1,15 @@
-
-"""Writes compile-only stubs of the Java ME APIs the game uses (MIDP, M3G, MMAPI) into build/stubsrc.
-Constants are deliberately NOT compile-time constants, so javac cannot inline wrong values:
-the phone resolves the real values at runtime. Stubs are never packed into the game jar."""
+"""Writes compile-only stubs of the Java ME APIs the game uses."""
 import os
 
 OUT = os.path.join('build', 'stubsrc')
-C = lambda n: 'Integer.parseInt("%d")' % n   # non-constant int
+C = lambda n: 'Integer.parseInt("%d")' % n
 
 files = {}
 
+
 def add(pkg, name, body):
     files[(pkg, name)] = body
+
 
 # ---------------- MIDP
 add('javax.microedition.midlet', 'MIDletStateChangeException',
@@ -40,13 +39,20 @@ add('javax.microedition.lcdui', 'Font', '''public class Font {
     public static Font getFont(int face, int style, int size) { return null; }
 }''' % (C(64), C(1), C(8)))
 
+# Graphics: includes all drawing methods used by the game.
 add('javax.microedition.lcdui', 'Graphics', '''public class Graphics {
     public static final int HCENTER = %s, VCENTER = %s, LEFT = %s, RIGHT = %s, TOP = %s, BOTTOM = %s, BASELINE = %s;
+
     public void setColor(int rgb) {}
     public void setFont(Font f) {}
     public void drawString(String s, int x, int y, int anchor) {}
+
     public void fillRect(int x, int y, int w, int h) {}
-    public void fillArc(int x, int y, int w, int h, int a, int b) {}
+    public void drawRect(int x, int y, int w, int h) {}
+    public void drawLine(int x1, int y1, int x2, int y2) {}
+    public void drawArc(int x, int y, int w, int h, int startAngle, int arcAngle) {}
+    public void fillArc(int x, int y, int w, int h, int startAngle, int arcAngle) {}
+    public void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3) {}
 }''' % tuple(C(v) for v in (1, 2, 4, 8, 16, 32, 64)))
 
 add('javax.microedition.lcdui', 'Image', '''public class Image {
@@ -203,9 +209,9 @@ add(M, 'Graphics3D', '''public final class Graphics3D {
 
 # ---------------- Write all stub source files
 for (pkg, name), body in files.items():
-    d = os.path.join(OUT, *pkg.split('.'))
-    os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, name + '.java'), 'w') as f:
-        f.write('package %s;\n%s\n' % (pkg, body))
+    directory = os.path.join(OUT, *pkg.split('.'))
+    os.makedirs(directory, exist_ok=True)
+    with open(os.path.join(directory, name + '.java'), 'w') as f:
+        f.write('package %s;\\n%s\\n' % (pkg, body))
 
 print('wrote %d stub classes' % len(files))
