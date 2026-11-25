@@ -3,16 +3,16 @@ import javax.microedition.lcdui.*;
 import javax.microedition.lcdui.game.GameCanvas;
 import javax.microedition.m3g.*;
 
-/** Game loop, input, camera, missions, HUD. Controls: W/S gas/brake, A/D steer, Space handbrake, C camera, R reset, P pause, Q quit. */
+/** RallyCity game loop, driving, missions, navigation map and HUD. */
 public class GameView extends GameCanvas implements Runnable {
     static final int SKY = 0xA8C4DC;
 
-    // Missions: target x,z (road intersections), time limit (0 = none), wanted level on start, reward
     static final float[] MX = {0f, -240f, 480f, -480f, 0f};
     static final float[] MZ = {240f, -120f, -480f, 480f, 0f};
     static final int[] MT = {0, 70, 100, 140, 100};
     static final int[] MW = {0, 0, 2, 0, 0};
     static final int[] MR = {300, 600, 1000, 1500, 800};
+
     static final String[] MS = {
         "Pick up the package",
         "Deliver it fast!",
@@ -24,10 +24,12 @@ public class GameView extends GameCanvas implements Runnable {
     private RallyMIDlet midlet;
     private Thread th;
     private volatile boolean run, paused;
+
     private Graphics3D g3d;
     private World scene;
     private Camera cam;
     private Transform camT = new Transform();
+
     private Car car;
     private World3D map;
     private Traffic traffic;
@@ -35,9 +37,12 @@ public class GameView extends GameCanvas implements Runnable {
     private Mesh marker;
 
     private boolean kUp, kDown, kLeft, kRight, kHb;
+    private boolean mapOpen;
+
     private int camMode;
     private float camH;
     private float[] pp = new float[2];
+
     private int mi, money, fps;
     private float mtime, msgT;
     private String msg = "";
@@ -58,11 +63,18 @@ public class GameView extends GameCanvas implements Runnable {
         scene.setBackground(bg);
 
         cam = new Camera();
-        cam.setPerspective(65f, (float) getWidth() / getHeight(), 2.5f, 135f);
+        cam.setPerspective(
+            65f,
+            (float)getWidth() / getHeight(),
+            2.5f,
+            135f
+        );
+
         scene.addChild(cam);
         scene.setActiveCamera(cam);
 
         Mats.init(SKY);
+
         map = new World3D(scene);
 
         car = new Car(0x2E5FB0, false);
@@ -73,6 +85,7 @@ public class GameView extends GameCanvas implements Runnable {
 
         MeshBuilder mb = new MeshBuilder(40, 0.1f);
         mb.box(-1f, 0f, -1f, 1f, 40f, 1f, 0xFFD21F);
+
         marker = mb.build();
         scene.addChild(marker);
 
@@ -190,6 +203,10 @@ public class GameView extends GameCanvas implements Runnable {
                 if (d) sound.toggle();
                 break;
 
+            case 'n':
+                if (d) mapOpen = !mapOpen;
+                break;
+
             case 'q':
                 if (d) midlet.quit();
                 break;
@@ -273,9 +290,12 @@ public class GameView extends GameCanvas implements Runnable {
         }
 
         // Background music has been removed.
-        // Engine and gameplay sound effects remain active.
         sound.engine(car.speed(), kUp);
-        sound.effects(traffic.wanted > 0, car.slip, car.speed());
+        sound.effects(
+            traffic.wanted > 0,
+            car.slip,
+            car.speed()
+        );
 
         if (traffic.busted) {
             traffic.busted = false;
@@ -315,23 +335,27 @@ public class GameView extends GameCanvas implements Runnable {
 
     private void updateCamera(float dt) {
         float dh = Car.norm(car.h - camH);
-        camH += dh * Math.min(1f, dt * (camMode == 2 ? 20f : 3.5f));
+
+        camH += dh * Math.min(
+            1f,
+            dt * (camMode == 2 ? 20f : 3.5f)
+        );
 
         float cx, cy, cz, pitch;
 
         if (camMode == 2) {
             camH = car.h;
 
-            cx = car.x + (float) Math.sin(car.h) * 0.4f;
-            cz = car.z + (float) Math.cos(car.h) * 0.4f;
+            cx = car.x + (float)Math.sin(car.h) * 0.4f;
+            cz = car.z + (float)Math.cos(car.h) * 0.4f;
 
             cy = 1.3f;
             pitch = 2f;
         } else {
             float dist = camMode == 0 ? 7f : 11f;
 
-            cx = car.x - (float) Math.sin(camH) * dist;
-            cz = car.z - (float) Math.cos(camH) * dist;
+            cx = car.x - (float)Math.sin(camH) * dist;
+            cz = car.z - (float)Math.cos(camH) * dist;
 
             cy = camMode == 0 ? 3.0f : 4.8f;
             pitch = camMode == 0 ? 10f : 15f;
@@ -341,7 +365,10 @@ public class GameView extends GameCanvas implements Runnable {
 
         camT.setIdentity();
         camT.postTranslate(cx, cy, cz);
-        camT.postRotate(camH * 57.29578f + 180f, 0f, 1f, 0f);
+        camT.postRotate(
+            camH * 57.29578f + 180f,
+            0f, 1f, 0f
+        );
         camT.postRotate(-pitch, 1f, 0f, 0f);
 
         cam.setTransform(camT);
@@ -362,7 +389,12 @@ public class GameView extends GameCanvas implements Runnable {
             }
         }
 
-        hud(g);
+        if (mapOpen) {
+            drawMap(g);
+        } else {
+            hud(g);
+        }
+
         flushGraphics();
     }
 
@@ -379,17 +411,29 @@ public class GameView extends GameCanvas implements Runnable {
         g.setColor(0xFFFFFF);
 
         g.drawString(
-            (int) (car.speed() * 3.6f) + " km/h",
+            (int)(car.speed() * 3.6f) + " km/h",
             W - 4, H - 4,
             Graphics.BOTTOM | Graphics.RIGHT
         );
 
-        g.drawString("$" + money, 4, 4, Graphics.TOP | Graphics.LEFT);
-        g.drawString(MS[mi], 4, 20, Graphics.TOP | Graphics.LEFT);
+        g.drawString(
+            "$" + money,
+            4, 4,
+            Graphics.TOP | Graphics.LEFT
+        );
+
+        g.drawString(
+            MS[mi],
+            4, 20,
+            Graphics.TOP | Graphics.LEFT
+        );
 
         if (MT[mi] > 0) {
-            g.drawString("Time " + (int) mtime, 4, 36,
-                         Graphics.TOP | Graphics.LEFT);
+            g.drawString(
+                "Time " + (int)mtime,
+                4, 36,
+                Graphics.TOP | Graphics.LEFT
+            );
         }
 
         if (traffic.wanted > 0) {
@@ -400,13 +444,20 @@ public class GameView extends GameCanvas implements Runnable {
             }
 
             g.setColor(0xFF3030);
-            g.drawString(sb.toString(), W / 2, 4,
-                         Graphics.TOP | Graphics.HCENTER);
+            g.drawString(
+                sb.toString(),
+                W / 2, 4,
+                Graphics.TOP | Graphics.HCENTER
+            );
         }
 
         g.setColor(0xAAAAAA);
-        g.drawString(fps + " fps", 4, H - 4,
-                     Graphics.BOTTOM | Graphics.LEFT);
+
+        g.drawString(
+            fps + " fps",
+            4, H - 4,
+            Graphics.BOTTOM | Graphics.LEFT
+        );
 
         // Radar
         int rad = 26;
@@ -414,30 +465,237 @@ public class GameView extends GameCanvas implements Runnable {
         int ry = rad + 4;
 
         g.setColor(0x202020);
-        g.fillArc(rx - rad, ry - rad, rad * 2, rad * 2, 0, 360);
+        g.fillArc(
+            rx - rad, ry - rad,
+            rad * 2, rad * 2,
+            0, 360
+        );
 
         g.setColor(0xFFFFFF);
         g.fillRect(rx - 1, ry - 1, 3, 3);
 
-        blip(g, rx, ry, rad, MX[mi], MZ[mi], 0xFFD21F);
+        blip(
+            g, rx, ry, rad,
+            MX[mi], MZ[mi],
+            0xFFD21F
+        );
 
         for (int c = 0; c < Traffic.MAXC; c++) {
             if (traffic.cact[c]) {
-                blip(g, rx, ry, rad,
-                     traffic.cx[c], traffic.cz[c], 0xFF3030);
+                blip(
+                    g, rx, ry, rad,
+                    traffic.cx[c], traffic.cz[c],
+                    0xFF3030
+                );
             }
         }
 
         if (msgT > 0f) {
             g.setColor(0xFFFFFF);
-            g.drawString(msg, W / 2, H / 3,
-                         Graphics.BASELINE | Graphics.HCENTER);
+            g.drawString(
+                msg,
+                W / 2, H / 3,
+                Graphics.BASELINE | Graphics.HCENTER
+            );
         }
 
         if (paused) {
-            g.drawString("PAUSED (P)", W / 2, H / 2,
-                         Graphics.BASELINE | Graphics.HCENTER);
+            g.drawString(
+                "PAUSED (P)",
+                W / 2, H / 2,
+                Graphics.BASELINE | Graphics.HCENTER
+            );
         }
+    }
+
+    /** Draws a local street map centered on the player. */
+    private void drawMap(Graphics g) {
+        int w = getWidth();
+        int h = getHeight();
+
+        int cx = w / 2;
+        int cy = h / 2;
+
+        int available = Math.min(w - 24, h - 64);
+        int radius = available / 2;
+
+        if (radius < 20) radius = 20;
+
+        float scale = (radius * 2f) / (World3D.S * 5f);
+
+        g.setColor(0x101820);
+        g.fillRect(0, 0, w, h);
+
+        g.setColor(0xFFFFFF);
+        g.drawString(
+            "CITY MAP",
+            cx, 5,
+            Graphics.TOP | Graphics.HCENTER
+        );
+
+        // Draw nearby map cells.
+        int ci = World3D.fl(car.x);
+        int cj = World3D.fl(car.z);
+
+        for (int i = ci - 2; i <= ci + 2; i++) {
+            for (int j = cj - 2; j <= cj + 2; j++) {
+                float x0 = cx + (i * World3D.S - car.x) * scale;
+                float y0 = cy - ((j + 1) * World3D.S - car.z) * scale;
+
+                int left = (int)x0;
+                int top = (int)y0;
+                int size = (int)(World3D.S * scale) + 1;
+
+                g.setColor(
+                    World3D.isCity(i, j)
+                    ? 0x263B49
+                    : 0x304B35
+                );
+
+                g.fillRect(left, top, size, size);
+
+                g.setColor(0x43535B);
+                g.drawRect(left, top, size, size);
+            }
+        }
+
+        // Draw roads using the same road layout as the 3D world.
+        g.setColor(0xB8B5AA);
+
+        for (int i = ci - 2; i <= ci + 2; i++) {
+            for (int j = cj - 2; j <= cj + 2; j++) {
+                float wx = i * World3D.S;
+                float wz = j * World3D.S;
+
+                if (World3D.roadX(i, j)) {
+                    int sx = cx + (int)((wx - car.x) * scale);
+                    int sy1 = cy - (int)(((j + 1) * World3D.S - car.z) * scale);
+                    int sy2 = cy - (int)((j * World3D.S - car.z) * scale);
+
+                    int rw = Math.max(3, (int)(World3D.RW * scale));
+
+                    g.fillRect(
+                        sx - rw / 2,
+                        sy1,
+                        rw,
+                        sy2 - sy1 + 1
+                    );
+                }
+
+                if (World3D.roadZ(i, j)) {
+                    int sy = cy - (int)((wz - car.z) * scale);
+                    int sx1 = cx + (int)((i * World3D.S - car.x) * scale);
+                    int sx2 = cx + (int)(((i + 1) * World3D.S - car.x) * scale);
+
+                    int rw = Math.max(3, (int)(World3D.RW * scale));
+
+                    g.fillRect(
+                        sx1,
+                        sy - rw / 2,
+                        sx2 - sx1 + 1,
+                        rw
+                    );
+                }
+            }
+        }
+
+        // Mission destination.
+        drawMapMarker(
+            g, cx, cy, scale,
+            MX[mi], MZ[mi],
+            0xFFD21F
+        );
+
+        // Police vehicles.
+        for (int c = 0; c < Traffic.MAXC; c++) {
+            if (traffic.cact[c]) {
+                drawMapMarker(
+                    g, cx, cy, scale,
+                    traffic.cx[c], traffic.cz[c],
+                    0xFF3030
+                );
+            }
+        }
+
+        // Player position and heading.
+        int px = cx;
+        int py = cy;
+
+        float sn = (float)Math.sin(car.h);
+        float cs = (float)Math.cos(car.h);
+
+        int tipX = px + (int)(sn * 10f);
+        int tipY = py - (int)(cs * 10f);
+
+        int leftX = px + (int)(-cs * 6f);
+        int leftY = py - (int)(-sn * 6f);
+
+        int rightX = px + (int)(cs * 6f);
+        int rightY = py - (int)(sn * 6f);
+
+        g.setColor(0xFFFFFF);
+        g.fillTriangle(
+            tipX, tipY,
+            leftX, leftY,
+            rightX, rightY
+        );
+
+        // Map frame and legend.
+        g.setColor(0xFFFFFF);
+        g.drawRect(
+            cx - radius,
+            cy - radius,
+            radius * 2,
+            radius * 2
+        );
+
+        g.setColor(0xFFD21F);
+        g.fillRect(8, h - 43, 7, 7);
+
+        g.setColor(0xFFFFFF);
+        g.drawString(
+            "MISSION",
+            20, h - 44,
+            Graphics.TOP | Graphics.LEFT
+        );
+
+        g.setColor(0xFF3030);
+        g.fillRect(82, h - 43, 7, 7);
+
+        g.setColor(0xFFFFFF);
+        g.drawString(
+            "POLICE",
+            94, h - 44,
+            Graphics.TOP | Graphics.LEFT
+        );
+
+        g.drawString(
+            "N - CLOSE MAP",
+            cx, h - 16,
+            Graphics.BOTTOM | Graphics.HCENTER
+        );
+
+        g.drawString(
+            "DRIVING CONTROLS STILL ACTIVE",
+            cx, h - 30,
+            Graphics.BOTTOM | Graphics.HCENTER
+        );
+    }
+
+    private void drawMapMarker(
+        Graphics g,
+        int cx,
+        int cy,
+        float scale,
+        float wx,
+        float wz,
+        int color
+    ) {
+        int x = cx + (int)((wx - car.x) * scale);
+        int y = cy - (int)((wz - car.z) * scale);
+
+        g.setColor(color);
+        g.fillRect(x - 3, y - 3, 7, 7);
     }
 
     private void blip(
@@ -452,13 +710,13 @@ public class GameView extends GameCanvas implements Runnable {
         float dx = wx - car.x;
         float dz = wz - car.z;
 
-        float sn = (float) Math.sin(car.h);
-        float cs = (float) Math.cos(car.h);
+        float sn = (float)Math.sin(car.h);
+        float cs = (float)Math.cos(car.h);
 
         float sx = (-dx * cs + dz * sn) * 0.1f;
         float sy = (dx * sn + dz * cs) * 0.1f;
 
-        float d = (float) Math.sqrt(sx * sx + sy * sy);
+        float d = (float)Math.sqrt(sx * sx + sy * sy);
 
         if (d > rad - 2) {
             float k = (rad - 2) / d;
@@ -468,10 +726,9 @@ public class GameView extends GameCanvas implements Runnable {
 
         g.setColor(color);
         g.fillRect(
-            cx + (int) sx - 1,
-            cy - (int) sy - 1,
-            3,
-            3
+            cx + (int)sx - 1,
+            cy - (int)sy - 1,
+            3, 3
         );
     }
 }
