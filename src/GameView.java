@@ -34,6 +34,7 @@ public class GameView extends GameCanvas implements Runnable {
     private World3D map;
     private Traffic traffic;
     private Sound sound;
+    private Navigation navigation;
     private Mesh marker;
 
     private boolean kUp, kDown, kLeft, kRight, kHb;
@@ -82,6 +83,7 @@ public class GameView extends GameCanvas implements Runnable {
 
         traffic = new Traffic(scene);
         sound = new Sound();
+        navigation = new Navigation();
 
         MeshBuilder mb = new MeshBuilder(40, 0.1f);
         mb.box(-1f, 0f, -1f, 1f, 40f, 1f, 0xFFD21F);
@@ -207,6 +209,20 @@ public class GameView extends GameCanvas implements Runnable {
                 if (d) mapOpen = !mapOpen;
                 break;
 
+            case 'v':
+                if (d) {
+                    navigation.setWaypoint(MX[mi], MZ[mi]);
+                    say("Waypoint set");
+                }
+                break;
+
+            case 'b':
+                if (d) {
+                    navigation.clearWaypoint();
+                    say("Waypoint cleared");
+                }
+                break;
+
             case 'q':
                 if (d) midlet.quit();
                 break;
@@ -289,7 +305,6 @@ public class GameView extends GameCanvas implements Runnable {
             sound.crash();
         }
 
-        // Background music has been removed.
         sound.engine(car.speed(), kUp);
         sound.effects(
             traffic.wanted > 0,
@@ -459,7 +474,6 @@ public class GameView extends GameCanvas implements Runnable {
             Graphics.BOTTOM | Graphics.LEFT
         );
 
-        // Radar
         int rad = 26;
         int rx = W - rad - 4;
         int ry = rad + 4;
@@ -489,6 +503,13 @@ public class GameView extends GameCanvas implements Runnable {
                 );
             }
         }
+
+        // Waypoint compass and distance.
+        navigation.draw(
+            g, W,
+            car.x, car.z,
+            car.h
+        );
 
         if (msgT > 0f) {
             g.setColor(0xFFFFFF);
@@ -533,7 +554,6 @@ public class GameView extends GameCanvas implements Runnable {
             Graphics.TOP | Graphics.HCENTER
         );
 
-        // Draw nearby map cells.
         int ci = World3D.fl(car.x);
         int cj = World3D.fl(car.z);
 
@@ -559,7 +579,6 @@ public class GameView extends GameCanvas implements Runnable {
             }
         }
 
-        // Draw roads using the same road layout as the 3D world.
         g.setColor(0xB8B5AA);
 
         for (int i = ci - 2; i <= ci + 2; i++) {
@@ -606,6 +625,16 @@ public class GameView extends GameCanvas implements Runnable {
             0xFFD21F
         );
 
+        // Custom waypoint.
+        if (navigation.hasWaypoint()) {
+            drawMapMarker(
+                g, cx, cy, scale,
+                navigation.getTargetX(),
+                navigation.getTargetZ(),
+                0x35D9FF
+            );
+        }
+
         // Police vehicles.
         for (int c = 0; c < Traffic.MAXC; c++) {
             if (traffic.cact[c]) {
@@ -640,7 +669,6 @@ public class GameView extends GameCanvas implements Runnable {
             rightX, rightY
         );
 
-        // Map frame and legend.
         g.setColor(0xFFFFFF);
         g.drawRect(
             cx - radius,
@@ -659,25 +687,29 @@ public class GameView extends GameCanvas implements Runnable {
             Graphics.TOP | Graphics.LEFT
         );
 
-        g.setColor(0xFF3030);
+        g.setColor(0x35D9FF);
         g.fillRect(82, h - 43, 7, 7);
 
         g.setColor(0xFFFFFF);
         g.drawString(
-            "POLICE",
+            "WAYPOINT",
             94, h - 44,
+            Graphics.TOP | Graphics.LEFT
+        );
+
+        g.setColor(0xFF3030);
+        g.fillRect(170, h - 43, 7, 7);
+
+        g.setColor(0xFFFFFF);
+        g.drawString(
+            "POLICE",
+            182, h - 44,
             Graphics.TOP | Graphics.LEFT
         );
 
         g.drawString(
             "N - CLOSE MAP",
             cx, h - 16,
-            Graphics.BOTTOM | Graphics.HCENTER
-        );
-
-        g.drawString(
-            "DRIVING CONTROLS STILL ACTIVE",
-            cx, h - 30,
             Graphics.BOTTOM | Graphics.HCENTER
         );
     }
