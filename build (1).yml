@@ -1,0 +1,67 @@
+name: Build RallyCity
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Get ProGuard (does the Java ME preverify step)
+        run: |
+          wget -q https://github.com/Guardsquare/proguard/releases/download/v7.4.2/proguard-7.4.2.tar.gz
+          tar xzf proguard-7.4.2.tar.gz
+
+      - name: Build compile-only API stubs (no SDK jars needed)
+        run: |
+          python3 tools/make_stubs.py
+          mkdir -p build/stubs
+          javac -nowarn -d build/stubs $(find build/stubsrc -name '*.java')
+          cd build/stubs && jar cf ../stubs.jar . && cd ../..
+
+      - name: Compile (CLDC-compatible bytecode)
+        run: |
+          mkdir -p build/classes
+          javac -nowarn -source 1.3 -target 1.3 -classpath build/stubs.jar -d build/classes src/*.java
+
+      - name: Preverify
+        run: |
+          cat > build/pg.pro <<PGEOF
+          -injars build/classes
+          -outjars build/pre.jar
+          -libraryjars <java.home>/lib/rt.jar
+          -libraryjars build/stubs.jar
+          -microedition
+          -dontshrink
+          -dontoptimize
+          -dontobfuscate
+          -dontwarn
+          -keep public class RallyMIDlet
+          PGEOF
+          java -jar proguard-7.4.2/lib/proguard.jar @build/pg.pro
+
+      - name: Package jar and jad
+        run: |
+          mkdir pkg && cd pkg
+          unzip -q ../build/pre.jar
+          cp -r ../res/* .
+          jar cfm ../RallyCity.jar ../MANIFEST.MF .
+          cd ..
+          cp MANIFEST.MF RallyCity.jad
+          echo "MIDlet-Jar-URL: RallyCity.jar" >> RallyCity.jad
+          echo "MIDlet-Jar-Size: $(stat -c%s RallyCity.jar)" >> RallyCity.jad
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RallyCity
+          path: |
+            RallyCity.jar
+            RallyCity.jad
