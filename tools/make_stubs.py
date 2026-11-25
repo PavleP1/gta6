@@ -105,7 +105,7 @@ add(M, 'Fog', '''public class Fog extends Object3D {
     public static final int EXPONENTIAL = %s, LINEAR = %s;
     public Fog() {}
     public void setMode(int m) {}
-    public void setLinearDistances(float near, float far) {}
+    public void setLinear(float near, float far) {}
     public void setColor(int rgb) {}
 }''' % (C(80), C(81)))
 add(M, 'PolygonMode', '''public class PolygonMode extends Object3D {
