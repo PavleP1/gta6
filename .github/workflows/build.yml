@@ -1,3 +1,4 @@
+
 name: Build RallyCity
 
 on:
@@ -7,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,10 +37,10 @@ jobs:
       - name: Preverify
         run: |
           cat > build/pg.pro <<PGEOF
-          -injars build/classes
-          -outjars build/pre.jar
+          -injars classes
+          -outjars pre.jar
           -libraryjars <java.home>/lib/rt.jar
-          -libraryjars build/stubs.jar
+          -libraryjars stubs.jar
           -microedition
           -dontshrink
           -dontoptimize
@@ -46,20 +48,24 @@ jobs:
           -dontwarn
           -keep public class RallyMIDlet
           PGEOF
+
           java -jar proguard-7.4.2/lib/proguard.jar @build/pg.pro
 
       - name: Package jar and jad
         run: |
-          mkdir pkg && cd pkg
+          mkdir pkg
+          cd pkg
           unzip -q ../build/pre.jar
           cp -r ../res/* .
           jar cfm ../RallyCity.jar ../MANIFEST.MF .
           cd ..
+
           cp MANIFEST.MF RallyCity.jad
           echo "MIDlet-Jar-URL: RallyCity.jar" >> RallyCity.jad
           echo "MIDlet-Jar-Size: $(stat -c%s RallyCity.jar)" >> RallyCity.jad
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload RallyCity JAR and JAD
+        uses: actions/upload-artifact@v4
         with:
           name: RallyCity
           path: |
