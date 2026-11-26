@@ -1,3 +1,4 @@
+
 """Writes compile-only stubs of the Java ME APIs the game uses."""
 import os
 
@@ -39,7 +40,6 @@ add('javax.microedition.lcdui', 'Font', '''public class Font {
     public static Font getFont(int face, int style, int size) { return null; }
 }''' % (C(64), C(1), C(8)))
 
-# Graphics: includes all drawing methods used by the game.
 add('javax.microedition.lcdui', 'Graphics', '''public class Graphics {
     public static final int HCENTER = %s, VCENTER = %s, LEFT = %s, RIGHT = %s, TOP = %s, BOTTOM = %s, BASELINE = %s;
 
@@ -78,6 +78,39 @@ add('javax.microedition.lcdui.game', 'GameCanvas', '''public abstract class Game
     public void paint(javax.microedition.lcdui.Graphics g) {}
 }''')
 
+# ---------------- RMS (Record Management System)
+add('javax.microedition.rms', 'RecordStoreException',
+    'public class RecordStoreException extends Exception {}')
+
+add('javax.microedition.rms', 'RecordStoreNotFoundException',
+    'public class RecordStoreNotFoundException extends RecordStoreException {}')
+
+add('javax.microedition.rms', 'RecordStore', '''public class RecordStore {
+    public static RecordStore openRecordStore(String name, boolean create)
+        throws RecordStoreException {
+        return null;
+    }
+
+    public static void deleteRecordStore(String name)
+        throws RecordStoreException {}
+
+    public int getNumRecords() throws RecordStoreException { return 0; }
+
+    public int addRecord(byte[] data, int offset, int length)
+        throws RecordStoreException { return 1; }
+
+    public int getNextRecordID() throws RecordStoreException { return 1; }
+
+    public void setRecord(int id, byte[] data, int offset, int length)
+        throws RecordStoreException {}
+
+    public byte[] getRecord(int id) throws RecordStoreException {
+        return new byte[0];
+    }
+
+    public void closeRecordStore() throws RecordStoreException {}
+}''')
+
 # ---------------- MMAPI (audio)
 add('javax.microedition.media', 'MediaException',
     'public class MediaException extends Exception {}')
@@ -105,7 +138,10 @@ add('javax.microedition.media', 'Player', '''public interface Player {
 }''')
 
 add('javax.microedition.media', 'Manager', '''public final class Manager {
-    public static Player createPlayer(java.io.InputStream is, String type) throws java.io.IOException, MediaException { return null; }
+    public static Player createPlayer(java.io.InputStream is, String type)
+        throws java.io.IOException, MediaException {
+        return null;
+    }
 }''')
 
 # ---------------- M3G (JSR-184)
