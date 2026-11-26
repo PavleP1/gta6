@@ -2,8 +2,10 @@
 /**
  * RallyCity combat controller.
  *
- * Connects WeaponInventory with WeaponSystem.
- * Player input and scene integration are handled later.
+ * WeaponInventory is the authoritative source for ammunition.
+ * WeaponSystem handles projectile creation and movement.
+ *
+ * Compatible with CLDC 1.1 and MIDP 2.1.
  */
 public class CombatSystem {
 
@@ -17,7 +19,8 @@ public class CombatSystem {
                         WeaponSystem weapons) {
         if (inv == null || weapons == null) {
             throw new IllegalArgumentException(
-                "Combat systems cannot be null");
+                "Combat systems cannot be null"
+            );
         }
 
         inventory = inv;
@@ -25,10 +28,20 @@ public class CombatSystem {
 
         reloadTimer = 0f;
         reloading = false;
+
+        syncAmmo();
     }
 
     /**
-     * Update weapon cooldowns and reload progress.
+     * Synchronize projectile ammunition with the selected
+     * weapon's loaded magazine.
+     */
+    private void syncAmmo() {
+        projectiles.setAmmo(inventory.getLoadedAmmo());
+    }
+
+    /**
+     * Update firing cooldowns and reload progress.
      */
     public void update(float dt) {
         if (dt <= 0f) return;
@@ -41,7 +54,9 @@ public class CombatSystem {
             if (reloadTimer <= 0f) {
                 reloading = false;
                 reloadTimer = 0f;
+
                 inventory.reload();
+                syncAmmo();
             }
         }
     }
@@ -57,11 +72,18 @@ public class CombatSystem {
         if (reloading) return false;
         if (!inventory.canFire()) return false;
 
+        syncAmmo();
+
         if (!projectiles.fire(x, y, z, heading)) {
             return false;
         }
 
-        inventory.consumeShot();
+        if (!inventory.consumeShot()) {
+            syncAmmo();
+            return false;
+        }
+
+        syncAmmo();
         return true;
     }
 
@@ -98,22 +120,38 @@ public class CombatSystem {
         }
     }
 
+    /**
+     * Select a weapon and synchronize its magazine.
+     */
     public boolean selectWeapon(int weapon) {
         if (reloading) return false;
-        return inventory.selectWeapon(weapon);
+
+        if (!inventory.selectWeapon(weapon)) {
+            return false;
+        }
+
+        syncAmmo();
+        return true;
     }
 
     public boolean unlockWeapon(int weapon) {
-        return inventory.unlockWeapon(weapon);
+        boolean result = inventory.unlockWeapon(weapon);
+        syncAmmo();
+        return result;
     }
 
     public void addAmmo(int weapon, int amount) {
         inventory.addAmmo(weapon, amount);
+        syncAmmo();
     }
 
+    /**
+     * Cancel an unfinished reload.
+     */
     public void cancelReload() {
         reloading = false;
         reloadTimer = 0f;
+        syncAmmo();
     }
 
     public boolean isReloading() {
@@ -138,7 +176,8 @@ public class CombatSystem {
 
     public String getWeaponName() {
         return inventory.getWeaponName(
-            inventory.getSelectedWeapon());
+            inventory.getSelectedWeapon()
+        );
     }
 
     public WeaponInventory getInventory() {
@@ -149,10 +188,13 @@ public class CombatSystem {
         return projectiles;
     }
 
+    /**
+     * Restore default weapons and ammunition.
+     */
     public void reset() {
         cancelReload();
         inventory.reset();
         projectiles.clear();
-        projectiles.setAmmo(WeaponSystem.START_AMMO);
+        syncAmmo();
     }
 }
