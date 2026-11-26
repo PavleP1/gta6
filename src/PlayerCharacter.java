@@ -17,14 +17,16 @@ public class PlayerCharacter {
 
     private boolean visible = true;
 
+    // Reused collision data to avoid per-frame allocations.
+    private final float[] collisionPosition = new float[2];
+
     public PlayerCharacter(Group parent) {
         root = new Group();
 
-        MeshBuilder mb = new MeshBuilder(80, 0.1f);
-
         // Body
+        MeshBuilder mb = new MeshBuilder(80, 0.1f);
         mb.box(-0.22f, 0.45f, -0.13f,
-                0.22f, 1.15f, 0.13f, 0x2457A6);
+               0.22f, 1.15f, 0.13f, 0x2457A6);
 
         body = mb.build();
         root.addChild(body);
@@ -32,12 +34,13 @@ public class PlayerCharacter {
         // Head
         MeshBuilder hb = new MeshBuilder(40, 0.1f);
         hb.box(-0.14f, 1.17f, -0.14f,
-                0.14f, 1.45f, 0.14f, 0xD9A477);
+               0.14f, 1.45f, 0.14f, 0xD9A477);
 
         head = hb.build();
         root.addChild(head);
 
         parent.addChild(root);
+
         setVisible(true);
         sync();
     }
@@ -53,6 +56,8 @@ public class PlayerCharacter {
     public void update(float dt, boolean forward, boolean backward,
                        boolean left, boolean right, World3D world) {
         if (dt <= 0f) return;
+
+        // Prevent large movement jumps after a slow frame.
         if (dt > 0.06f) dt = 0.06f;
 
         float turn = 0f;
@@ -63,20 +68,23 @@ public class PlayerCharacter {
         heading += turn * 2.4f * dt;
 
         float input = 0f;
+
         if (forward) input += 1f;
         if (backward) input -= 1f;
 
         float targetSpeed = input * 3.2f;
-        speed += (targetSpeed - speed) * Math.min(1f, dt * 8f);
+
+        speed += (targetSpeed - speed) *
+                 Math.min(1f, dt * 8f);
 
         float nx = x + (float)Math.sin(heading) * speed * dt;
         float nz = z + (float)Math.cos(heading) * speed * dt;
 
-        float[] p = new float[2];
-        p[0] = nx;
-        p[1] = nz;
+        collisionPosition[0] = nx;
+        collisionPosition[1] = nz;
 
-        if (world != null && world.resolve(p, 0.28f)) {
+        if (world != null &&
+            world.resolve(collisionPosition, 0.28f)) {
             speed = 0f;
         } else {
             x = nx;
