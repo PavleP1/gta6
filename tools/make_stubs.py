@@ -38,6 +38,7 @@ add('javax.microedition.lcdui', 'Display', '''public class Display {
 add('javax.microedition.lcdui', 'Font', '''public class Font {
     public static final int FACE_PROPORTIONAL = %s, STYLE_BOLD = %s, SIZE_SMALL = %s;
     public static Font getFont(int face, int style, int size) { return null; }
+    public static Font getDefaultFont() { return null; }
 }''' % (C(64), C(1), C(8)))
 
 add('javax.microedition.lcdui', 'Graphics', '''public class Graphics {
