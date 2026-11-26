@@ -248,6 +248,6 @@ for (pkg, name), body in files.items():
     directory = os.path.join(OUT, *pkg.split('.'))
     os.makedirs(directory, exist_ok=True)
     with open(os.path.join(directory, name + '.java'), 'w') as f:
-        f.write('package %s;\\n%s\\n' % (pkg, body))
+        f.write('package %s;\n%s\n' % (pkg, body))
 
 print('wrote %d stub classes' % len(files))
