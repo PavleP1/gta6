@@ -36,6 +36,13 @@ public class RallyMIDlet extends MIDlet {
         gv.start();
     }
 
+    public void showMenu() {
+        if (gv != null) gv.pause();
+        if (display != null && menu != null) {
+            display.setCurrent(menu);
+        }
+    }
+
     public void continueGame() {
         if (gv == null) return;
 
