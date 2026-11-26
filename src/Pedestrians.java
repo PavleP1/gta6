@@ -3,214 +3,161 @@ import java.util.Random;
 import javax.microedition.m3g.*;
 
 /**
- * Lightweight pedestrian system for RallyCity.
- * Pedestrians wander near the player and stay off roads.
+ * Lightweight pedestrian manager for RallyCity.
  *
- * Designed for CLDC 1.1, MIDP 2.1 and M3G.
+ * Creates a small number of pedestrians that walk around
+ * the active world. Meshes are created once and reused.
+ *
+ * This file is standalone for now. GameView integration
+ * will be done later when we edit existing files.
  */
 public class Pedestrians {
 
-    public static final int COUNT = 5;
+    public static final int MAX_PEDESTRIANS = 5;
 
-    private static final float SPAWN_MIN = 20f;
-    private static final float SPAWN_MAX = 55f;
-    private static final float DESPAWN = 95f;
-    private static final float SPEED = 1.1f;
+    private static final float WALK_SPEED = 1.8f;
+    private static final float ARRIVE_DISTANCE = 2.0f;
+    private static final float DESPAWN_DISTANCE = 105f;
+    private static final float COLLISION_RADIUS = 0.45f;
 
-    private Random random = new Random(731);
+    private Group root;
+    private World3D world;
+    private Random random = new Random();
 
-    private Mesh[] meshes = new Mesh[COUNT];
+    private Mesh[] models = new Mesh[MAX_PEDESTRIANS];
 
-    private float[] x = new float[COUNT];
-    private float[] z = new float[COUNT];
-    private float[] heading = new float[COUNT];
+    private float[] x = new float[MAX_PEDESTRIANS];
+    private float[] z = new float[MAX_PEDESTRIANS];
 
-    private float[] targetX = new float[COUNT];
-    private float[] targetZ = new float[COUNT];
-    private float[] wait = new float[COUNT];
+    private float[] targetX = new float[MAX_PEDESTRIANS];
+    private float[] targetZ = new float[MAX_PEDESTRIANS];
 
-    private boolean[] active = new boolean[COUNT];
+    private float[] heading = new float[MAX_PEDESTRIANS];
+    private float[] wait = new float[MAX_PEDESTRIANS];
 
-    public Pedestrians(Group root) {
-        for (int i = 0; i < COUNT; i++) {
-            meshes[i] = buildPedestrian(i);
-            meshes[i].setRenderingEnable(false);
-            root.addChild(meshes[i]);
+    private float[][] collision = new float[MAX_PEDESTRIANS][2];
+
+    private boolean[] active = new boolean[MAX_PEDESTRIANS];
+
+    private int activeCount;
+
+    public Pedestrians(Group parent, World3D world) {
+        if (parent == null || world == null) {
+            throw new IllegalArgumentException(
+                "Parent and world must not be null"
+            );
+        }
+
+        this.root = parent;
+        this.world = world;
+
+        for (int i = 0; i < MAX_PEDESTRIANS; i++) {
+            models[i] = buildPedestrian(i);
+            models[i].setRenderingEnable(false);
+            root.addChild(models[i]);
         }
     }
 
     private Mesh buildPedestrian(int index) {
+        MeshBuilder mb = new MeshBuilder(48, 0.02f);
+
         int[] colors = {
-            0x305F9F,
-            0x9B4935,
-            0x477C45,
-            0x77718E,
-            0xB18A36
+            0x3569B7,
+            0xB84C38,
+            0x4D9857,
+            0xB58A32,
+            0x8056A8
         };
 
         int shirt = colors[index % colors.length];
 
-        MeshBuilder b = new MeshBuilder(160, 0.05f);
-
-        // Torso.
-        b.box(
-            -0.28f, 0.65f, -0.15f,
-             0.28f, 1.25f, 0.15f,
+        // Body.
+        mb.box(
+            -0.28f, 0.55f, -0.16f,
+             0.28f, 1.35f,  0.16f,
             shirt
         );
 
         // Head.
-        b.box(
-            -0.17f, 1.25f, -0.16f,
-             0.17f, 1.60f, 0.16f,
-            0xD5A47C
+        mb.box(
+            -0.20f, 1.35f, -0.18f,
+             0.20f, 1.75f,  0.18f,
+            0xD6A477
         );
 
-        // Left leg.
-        b.box(
-            -0.25f, 0.05f, -0.12f,
-            -0.03f, 0.65f, 0.12f,
-            0x30343D
-        );
-
-        // Right leg.
-        b.box(
-             0.03f, 0.05f, -0.12f,
-             0.25f, 0.65f, 0.12f,
-            0x30343D
-        );
-
-        // Left arm.
-        b.box(
-            -0.43f, 0.68f, -0.12f,
-            -0.28f, 1.20f, 0.12f,
-            shirt
-        );
-
-        // Right arm.
-        b.box(
-             0.28f, 0.68f, -0.12f,
-             0.43f, 1.20f, 0.12f,
-            shirt
-        );
-
-        return b.build();
+        return mb.build();
     }
 
-    public void update(float dt, float playerX, float playerZ) {
-        for (int i = 0; i < COUNT; i++) {
+    /**
+     * Call once when the player enters the world.
+     */
+    public void spawn(float playerX, float playerZ) {
+        activeCount = 0;
 
-            if (!active[i]) {
-                trySpawn(i, playerX, playerZ);
-                continue;
+        for (int i = 0; i < MAX_PEDESTRIANS; i++) {
+            active[i] = false;
+            models[i].setRenderingEnable(false);
+
+            if (findSpawnPosition(i, playerX, playerZ)) {
+                active[i] = true;
+                activeCount++;
+
+                chooseDestination(i);
+
+                models[i].setTranslation(
+                    x[i], 0f, z[i]
+                );
+
+                models[i].setRenderingEnable(true);
             }
-
-            float dx = x[i] - playerX;
-            float dz = z[i] - playerZ;
-
-            if (dx * dx + dz * dz > DESPAWN * DESPAWN) {
-                deactivate(i);
-                continue;
-            }
-
-            if (wait[i] > 0f) {
-                wait[i] -= dt;
-                continue;
-            }
-
-            float tx = targetX[i] - x[i];
-            float tz = targetZ[i] - z[i];
-
-            float distance =
-                (float)Math.sqrt(tx * tx + tz * tz);
-
-            if (distance < 1.2f) {
-                chooseTarget(i);
-                continue;
-            }
-
-            heading[i] = Car.atan2(tx, tz);
-
-            float step = SPEED * dt;
-
-            if (step > distance) step = distance;
-
-            float nx = x[i] +
-                (float)Math.sin(heading[i]) * step;
-
-            float nz = z[i] +
-                (float)Math.cos(heading[i]) * step;
-
-            int surface = World3D.surface(nx, nz);
-
-            // Keep pedestrians away from roads.
-            if (surface == 0 || surface == 1) {
-                chooseTarget(i);
-                continue;
-            }
-
-            x[i] = nx;
-            z[i] = nz;
-
-            meshes[i].setTranslation(x[i], 0f, z[i]);
-            meshes[i].setOrientation(
-                heading[i] * 57.29578f,
-                0f, 1f, 0f
-            );
         }
     }
 
-    private void trySpawn(int i, float px, float pz) {
-        for (int attempt = 0; attempt < 8; attempt++) {
-            float angle = random.nextFloat() *
-                          6.2831853f;
+    /**
+     * Finds a position away from the player and roads.
+     */
+    private boolean findSpawnPosition(
+        int index,
+        float playerX,
+        float playerZ
+    ) {
+        for (int attempt = 0; attempt < 30; attempt++) {
+            float angle = random.nextFloat() * 6.2831853f;
+            float distance = 12f + random.nextFloat() * 38f;
 
-            float distance = SPAWN_MIN +
-                random.nextFloat() *
-                (SPAWN_MAX - SPAWN_MIN);
-
-            float sx = px +
+            float px = playerX +
                 (float)Math.sin(angle) * distance;
 
-            float sz = pz +
+            float pz = playerZ +
                 (float)Math.cos(angle) * distance;
 
-            int surface = World3D.surface(sx, sz);
+            int surface = World3D.surface(px, pz);
 
+            // Avoid roads.
             if (surface == 0 || surface == 1) {
                 continue;
             }
 
-            x[i] = sx;
-            z[i] = sz;
-            heading[i] = angle;
+            x[index] = px;
+            z[index] = pz;
+            heading[index] = angle;
+            wait[index] = random.nextFloat() * 2f;
 
-            meshes[i].setTranslation(sx, 0f, sz);
-            meshes[i].setOrientation(
-                angle * 57.29578f,
-                0f, 1f, 0f
-            );
-
-            active[i] = true;
-            meshes[i].setRenderingEnable(true);
-
-            chooseTarget(i);
-            return;
+            return true;
         }
+
+        return false;
     }
 
-    private void chooseTarget(int i) {
-        for (int attempt = 0; attempt < 8; attempt++) {
-            float angle = random.nextFloat() *
-                          6.2831853f;
+    private void chooseDestination(int index) {
+        for (int attempt = 0; attempt < 12; attempt++) {
+            float angle = random.nextFloat() * 6.2831853f;
+            float distance = 5f + random.nextFloat() * 14f;
 
-            float distance = 5f +
-                random.nextFloat() * 12f;
-
-            float tx = x[i] +
+            float tx = x[index] +
                 (float)Math.sin(angle) * distance;
 
-            float tz = z[i] +
+            float tz = z[index] +
                 (float)Math.cos(angle) * distance;
 
             int surface = World3D.surface(tx, tz);
@@ -219,60 +166,173 @@ public class Pedestrians {
                 continue;
             }
 
-            targetX[i] = tx;
-            targetZ[i] = tz;
-            wait[i] = 0.3f + random.nextFloat() * 1.5f;
+            targetX[index] = tx;
+            targetZ[index] = tz;
+            heading[index] = angle;
             return;
         }
 
-        wait[i] = 1f;
-    }
-
-    private void deactivate(int i) {
-        active[i] = false;
-        meshes[i].setRenderingEnable(false);
+        wait[index] = 1.5f;
+        targetX[index] = x[index];
+        targetZ[index] = z[index];
     }
 
     /**
-     * Removes the nearest pedestrian inside the given radius.
-     * Returns true if a pedestrian was found.
+     * Update pedestrians.
+     *
+     * dt is elapsed time in seconds.
      */
-    public boolean hitNearest(float px, float pz,
-                              float radius) {
-        int found = -1;
-        float best = radius * radius;
+    public void update(
+        float dt,
+        float playerX,
+        float playerZ
+    ) {
+        if (dt <= 0f) return;
 
-        for (int i = 0; i < COUNT; i++) {
-            if (!active[i]) continue;
+        // Prevent large movement after a paused frame.
+        if (dt > 0.1f) dt = 0.1f;
 
-            float dx = x[i] - px;
-            float dz = z[i] - pz;
-            float d2 = dx * dx + dz * dz;
+        for (int i = 0; i < MAX_PEDESTRIANS; i++) {
+            if (!active[i]) {
+                if (findSpawnPosition(i, playerX, playerZ)) {
+                    active[i] = true;
+                    activeCount++;
 
-            if (d2 < best) {
-                best = d2;
-                found = i;
+                    chooseDestination(i);
+
+                    models[i].setTranslation(
+                        x[i], 0f, z[i]
+                    );
+
+                    models[i].setRenderingEnable(true);
+                }
+                continue;
+            }
+
+            float dx = x[i] - playerX;
+            float dz = z[i] - playerZ;
+
+            if (dx * dx + dz * dz >
+                DESPAWN_DISTANCE * DESPAWN_DISTANCE) {
+
+                active[i] = false;
+                activeCount--;
+
+                models[i].setRenderingEnable(false);
+                continue;
+            }
+
+            if (wait[i] > 0f) {
+                wait[i] -= dt;
+
+                if (wait[i] <= 0f) {
+                    chooseDestination(i);
+                }
+
+                continue;
+            }
+
+            float moveX = targetX[i] - x[i];
+            float moveZ = targetZ[i] - z[i];
+
+            float distance = (float)Math.sqrt(
+                moveX * moveX + moveZ * moveZ
+            );
+
+            if (distance < ARRIVE_DISTANCE) {
+                wait[i] = 0.5f + random.nextFloat() * 2f;
+                chooseDestination(i);
+                continue;
+            }
+
+            if (distance > 0.001f) {
+                moveX /= distance;
+                moveZ /= distance;
+            }
+
+            heading[i] = (float)Math.atan2(moveX, moveZ);
+
+            float step = WALK_SPEED * dt;
+
+            if (step > distance) {
+                step = distance;
+            }
+
+            float nextX = x[i] + moveX * step;
+            float nextZ = z[i] + moveZ * step;
+
+            collision[i][0] = nextX;
+            collision[i][1] = nextZ;
+
+            boolean blocked = world.resolve(
+                collision[i],
+                COLLISION_RADIUS
+            );
+
+            if (blocked) {
+                chooseDestination(i);
+                wait[i] = 0.4f;
+                continue;
+            }
+
+            // Do not let pedestrians walk onto roads.
+            int surface = World3D.surface(nextX, nextZ);
+
+            if (surface == 0 || surface == 1) {
+                chooseDestination(i);
+                continue;
+            }
+
+            x[i] = nextX;
+            z[i] = nextZ;
+
+            models[i].setTranslation(
+                x[i], 0f, z[i]
+            );
+
+            models[i].setOrientation(
+                heading[i] * 57.29578f,
+                0f, 1f, 0f
+            );
+        }
+    }
+
+    public void clear() {
+        for (int i = 0; i < MAX_PEDESTRIANS; i++) {
+            if (active[i]) {
+                active[i] = false;
+                models[i].setRenderingEnable(false);
             }
         }
 
-        if (found < 0) return false;
-
-        deactivate(found);
-        return true;
+        activeCount = 0;
     }
 
-    public boolean isActive(int i) {
-        if (i < 0 || i >= COUNT) return false;
-        return active[i];
+    public int getActiveCount() {
+        return activeCount;
     }
 
-    public float getX(int i) {
-        if (i < 0 || i >= COUNT) return 0f;
-        return x[i];
+    public boolean isActive(int index) {
+        if (index < 0 || index >= MAX_PEDESTRIANS) {
+            return false;
+        }
+
+        return active[index];
     }
 
-    public float getZ(int i) {
-        if (i < 0 || i >= COUNT) return 0f;
-        return z[i];
+    public float getX(int index) {
+        if (index < 0 || index >= MAX_PEDESTRIANS) {
+            return 0f;
+        }
+
+        return x[index];
+    }
+
+    public float getZ(int index) {
+        if (index < 0 || index >= MAX_PEDESTRIANS) {
+            return 0f;
+        }
+
+        return z[index];
     }
 }
