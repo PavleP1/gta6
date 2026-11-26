@@ -5,17 +5,13 @@ import javax.microedition.m3g.*;
  * RallyCity weapon projectile manager.
  *
  * Features:
- * - Multiple simultaneous projectiles
- * - Ammunition tracking
+ * - Up to 8 simultaneous projectiles
+ * - Ammunition tracking synchronized by CombatSystem
  * - Projectile lifetime
  * - World collision detection
- * - Reusable collision data to reduce garbage collection
+ * - Reusable collision data
  *
- * Compatible with CLDC 1.1, MIDP 2.1 and M3G (JSR-184).
- *
- * This class manages projectiles only. Player controls, weapon
- * selection, damage, NPC reactions and firing input will be
- * connected later through GameView.
+ * Compatible with CLDC 1.1, MIDP 2.1 and M3G.
  */
 public class WeaponSystem {
 
@@ -43,16 +39,16 @@ public class WeaponSystem {
     private float[] collisionPoint = new float[2];
 
     private int ammo = START_AMMO;
-
     private int activeCount;
 
     /**
-     * Creates the projectile meshes and attaches them to the
-     * supplied scene group.
+     * Creates projectile meshes and attaches them to the scene.
      */
     public WeaponSystem(Group root) {
         if (root == null) {
-            throw new IllegalArgumentException("Root group is null");
+            throw new IllegalArgumentException(
+                "Root group is null"
+            );
         }
 
         for (int i = 0; i < MAX_BULLETS; i++) {
@@ -78,13 +74,13 @@ public class WeaponSystem {
     }
 
     /**
-     * Fires a projectile.
+     * Fires one projectile.
      *
-     * px, py, pz = firing position.
-     * heading = direction in radians.
+     * Position is supplied in world coordinates.
+     * Heading is in radians.
      *
-     * Returns false if ammunition is empty or all projectile
-     * slots are occupied.
+     * Returns false if ammunition is empty or all
+     * projectile slots are occupied.
      */
     public boolean fire(float px, float py, float pz,
                         float heading) {
@@ -140,20 +136,14 @@ public class WeaponSystem {
     /**
      * Updates all active projectiles.
      *
-     * Movement is divided into small steps to reduce the
-     * chance of projectiles passing through obstacles.
+     * Movement is split into small steps to reduce
+     * the chance of passing through obstacles.
      */
     public void update(float dt, World3D world) {
-
-        if (dt <= 0f) {
-            return;
-        }
+        if (dt <= 0f) return;
 
         for (int i = 0; i < MAX_BULLETS; i++) {
-
-            if (!active[i]) {
-                continue;
-            }
+            if (!active[i]) continue;
 
             life[i] -= dt;
 
@@ -169,7 +159,9 @@ public class WeaponSystem {
                 moveX * moveX + moveZ * moveZ
             );
 
-            int steps = (int)Math.ceil(distance / MAX_STEP);
+            int steps = (int)Math.ceil(
+                distance / MAX_STEP
+            );
 
             if (steps < 1) {
                 steps = 1;
@@ -181,12 +173,14 @@ public class WeaponSystem {
             boolean collided = false;
 
             for (int s = 0; s < steps; s++) {
-
                 collisionPoint[0] = x[i] + stepX;
                 collisionPoint[1] = z[i] + stepZ;
 
                 if (world != null &&
-                    world.resolve(collisionPoint, BULLET_RADIUS)) {
+                    world.resolve(
+                        collisionPoint,
+                        BULLET_RADIUS
+                    )) {
 
                     collided = true;
                     break;
@@ -208,10 +202,9 @@ public class WeaponSystem {
     }
 
     /**
-     * Deactivates one projectile and hides its mesh.
+     * Hide and deactivate one projectile.
      */
     private void deactivate(int index) {
-
         if (index < 0 || index >= MAX_BULLETS) {
             return;
         }
@@ -230,10 +223,9 @@ public class WeaponSystem {
     }
 
     /**
-     * Deactivates every projectile.
+     * Deactivate every projectile.
      */
     public void clear() {
-
         for (int i = 0; i < MAX_BULLETS; i++) {
             deactivate(i);
         }
@@ -243,10 +235,7 @@ public class WeaponSystem {
      * Adds ammunition.
      */
     public void addAmmo(int amount) {
-
-        if (amount <= 0) {
-            return;
-        }
+        if (amount <= 0) return;
 
         ammo += amount;
 
@@ -256,7 +245,7 @@ public class WeaponSystem {
     }
 
     /**
-     * Refills ammunition to the starting amount.
+     * Refills ammunition to the default amount.
      */
     public void reload() {
         ammo = START_AMMO;
@@ -264,9 +253,11 @@ public class WeaponSystem {
 
     /**
      * Sets ammunition directly.
+     *
+     * CombatSystem uses this to synchronize the
+     * selected weapon's loaded magazine.
      */
     public void setAmmo(int amount) {
-
         if (amount < 0) {
             amount = 0;
         }
@@ -278,32 +269,19 @@ public class WeaponSystem {
         ammo = amount;
     }
 
-    /**
-     * Returns remaining ammunition.
-     */
     public int getAmmo() {
         return ammo;
     }
 
-    /**
-     * Returns true if ammunition is available.
-     */
     public boolean hasAmmo() {
         return ammo > 0;
     }
 
-    /**
-     * Returns the number of active projectiles.
-     */
     public int getActiveCount() {
         return activeCount;
     }
 
-    /**
-     * Checks whether a projectile slot is active.
-     */
     public boolean isActive(int index) {
-
         if (index < 0 || index >= MAX_BULLETS) {
             return false;
         }
@@ -312,7 +290,6 @@ public class WeaponSystem {
     }
 
     public float getX(int index) {
-
         if (index < 0 || index >= MAX_BULLETS) {
             return 0f;
         }
@@ -321,7 +298,6 @@ public class WeaponSystem {
     }
 
     public float getY(int index) {
-
         if (index < 0 || index >= MAX_BULLETS) {
             return 0f;
         }
@@ -330,7 +306,6 @@ public class WeaponSystem {
     }
 
     public float getZ(int index) {
-
         if (index < 0 || index >= MAX_BULLETS) {
             return 0f;
         }
