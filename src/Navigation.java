@@ -49,15 +49,16 @@ public class Navigation {
         float dx = targetX - playerX;
         float dz = targetZ - playerZ;
 
-        float targetAngle = (float)Math.atan2(dx, dz);
+        // Use the project's own atan2 implementation.
+        float targetAngle = Car.atan2(dx, dz);
         float relative = targetAngle - heading;
 
-        while (relative > Math.PI) {
-            relative -= (float)(Math.PI * 2.0);
+        while (relative > Car.PI) {
+            relative -= 2f * Car.PI;
         }
 
-        while (relative < -Math.PI) {
-            relative += (float)(Math.PI * 2.0);
+        while (relative < -Car.PI) {
+            relative += 2f * Car.PI;
         }
 
         return relative * 57.29578f;
