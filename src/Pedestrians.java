@@ -7,9 +7,6 @@ import javax.microedition.m3g.*;
  *
  * Creates a small number of pedestrians that walk around
  * the active world. Meshes are created once and reused.
- *
- * This file is standalone for now. GameView integration
- * will be done later when we edit existing files.
  */
 public class Pedestrians {
 
@@ -250,7 +247,8 @@ public class Pedestrians {
                 moveZ /= distance;
             }
 
-            heading[i] = (float)Math.atan2(moveX, moveZ);
+            // Use Car's compatible atan2 implementation.
+            heading[i] = Car.atan2(moveX, moveZ);
 
             float step = WALK_SPEED * dt;
 
